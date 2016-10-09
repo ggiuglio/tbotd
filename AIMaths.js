@@ -13,7 +13,6 @@ function AIWaiter()
 	timer = setInterval(function(){AIchooseAction()}, 1500);
 }
 
-
 function AIchooseAction()
 {
 	clearInterval(timer);

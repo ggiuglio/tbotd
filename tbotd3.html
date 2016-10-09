@@ -1,0 +1,2094 @@
+<!DOCTYPE HTML>
+<html><head>
+
+	<script src="lib/easeljs-0.7.0.min.js"></script>
+	<script src="lib/tweenjs-0.5.0.min.js"></script>
+	
+    <script src="objectsAnimations.js"></script>
+	<script src="characterObjects.js"></script>
+  
+    <script src="gameMaths.js"></script>
+    <script src="pathFinder.js"></script>
+	<script src="gameActions.js"></script>
+
+	<script src="AIMaths.js"></script>
+    <script src="displayFunctions.js"></script>
+    <script src="canvasFunctions.js"></script> 
+    
+    
+    <script src="playersJSON.js"></script>
+    <script src="roomsJSON.js"></script>
+    <script src="inventoryJSON.js"></script>
+    <script src="objectsJSON.js"></script>
+    <script src="levelsJSON.js"></script>
+    
+    <script src="mapReaderBackend.js"></script>
+    
+    <script src="mapReader.js"></script>
+    
+	<script>
+		var basePath = "http://ggiuglio.altervista.org/ub";
+		var versionNumber = "0.2.1";
+		var versionNote = "version 0.2.1 - interfaccia grafica ritoccata, nuovo pathfinder per i nemici e un tot di bug risolti, in piu' i livelli 1 e 2 sono ora quasi definitivi, sento odere di beta... </br>  version 0.2.0 - nuova interfaccia grafica scribble-style, l'unica parte che non e' stata curata e' questa finestra <br /> version 0.1.0 - Mi dicono che aver aggiunto gli incantesimi e' una modifica che si merita un nuovo numero, ecco qui, gli incantesimi ora ci sono (le animazioni dei sudedtti sono ancora tutte da rivedere, e il sonno per motivi miei ha effetto solo su un nemico) </br> version 0.0.4 - Gli incantesimi funzionano, sono solo due e mancano ancora tanti dettagli ma gli incantesimisi consumano, generano attacchi di opportunita' e fanno tirare i ts <br />version 0.0.4 alpha - una aplha (ma proprio alpha alpha alpha) degli incantesimi, non centrano niente con Tzel e non funzionano e' giusto per vedere le animazioni <br/> - version 0.0.3 aggiunta l'azione quick use per usare gli oggetti senza aprire i pop-up, bug fixing vario e variegato, scheda del personaggio semi definitiva, descrizione delle stanze salienti dei dungeon <br/> - version 0.0.2 pathfinder fix, ora i nemici inseguono i personaggi con piu' convinzione dietro gli angoli e a distanze considerevoli + prima versione scheda del personaggio <br />  - version 0.0.1: Nuova interfaccia grafica (decisamente di prova, per ora l'azio look/talk non fa nulla), fixato bug carica <br /> -  version 0.0.0: E' la prima versione che pubblico quel che vedete (a parte gli incantesimi e la scheda del personaggio) piu' o meno funziona, quindi le azioni ci sono, gli oggetti si usano e si raccolgono etc... <br /> il mio ultimogenito comunque e' la push ;) anzi no, e' il versioning"; 
+	
+		var aImg;
+		var bImg;
+		var cImg;
+		var dImg;
+	
+		// stage variables
+		var backgroundContainer = new createjs.Container();
+		var playersContainer = new createjs.Container();
+		var spriteContainer = new createjs.Container();
+		var objectsContainer = new createjs.Container();
+		var aureasContainer = new createjs.Container();
+	
+		var Ease = createjs.Ease;
+		
+		var canvasOffsetX = 0;
+		var canvasOffsetY = 0;
+		var canvasZoom = 1;
+		var showDebugLines = false;
+		var meterEquivalence = 70;
+		var lifeBallFilling = null;
+		var lifeBall = null;
+	
+		// level data should come from url
+		var chapter = 1;
+		var level = 1;
+		var levelID = 'laFugaDiTzel';
+        //var levelID = 'testLevel';
+		var montezuma = true;
+
+		var showTutorial = false;
+		var currentStage;
+		var mapImage = null;
+		var weaponSprites = new Array();
+		var spellSprites = new Array();
+		
+		var players = new Array();
+		var heroes = new Array();
+		var teams = new Array();
+		var objects = new Array();
+		var walls = new Array();
+		var rooms = new Array();
+		
+		// for new mape reader
+		var stages = new Array();
+		
+		var randomInitiative = false;
+		
+		var wallLines = new Array(); // for test wall painting 
+	
+		var timedEvents = new Array();
+		var gameOverSituations = new Array();
+		var looseDescription = new Array();
+		var winDescription = "";
+		var chapterName = "";
+		var levelDescription = "";
+		var levelState = "";
+		
+		// events variables
+		var loaded = false;
+		var mouseX = 0;
+		var mouseY = 0;
+		var startMouseX = 0;
+		var startMouseY = 0;
+		var mouseDown = false;
+		
+		// technical variables
+		var activeCharacter;
+		var actionOnGoing = false;		
+		var actionSelected = "nothing";
+		var currentRound;
+		var roundSetter;
+		var fistSprite;
+		var weaponIamge;
+		var windowOpen = false;
+		var equipment = new Array();
+		
+	
+
+		var gameOver = false;
+		var lang = 'en';
+		if (location.search != null && location.search != "")
+		{
+			if (location.search.split("lang=")[1])
+				lang = location.search.split("lang=")[1]
+		}
+
+		function init()
+		{	
+			var container = document.getElementById('container');
+			
+			stage = new createjs.Stage(container);
+		    stage.mouseEventsEnabled = true;
+			createjs.Touch.enable(stage);
+			
+			createjs.Ticker.addEventListener("tick", tick);
+			createjs.Ticker.setInterval(60);
+			createjs.Ticker.setFPS(80);	
+			
+			stage.enableMouseOver();
+
+			stage.on("stagemousedown", function(event) { setMouseDown(event) });	
+			stage.on("stagemouseup", function(event) {setMouseUp(event) });
+			stage.on("stagemousemove", function(event) { setMouseMove(event) });
+			
+			stage.on("dblclick", function(event) { 
+				if(showDebugLines)
+				{
+					var x =  event.stageX / canvasZoom - canvasOffsetX;
+					var y =  event.stageY  / canvasZoom - canvasOffsetY;
+					alert("x= " + x + " y = " + y);
+				}
+			
+			});
+					
+			//stage.on("touchstart", function(event) { setMouseDown(event) });
+			//stage.on("touchend", function(event) {alert("touch end"); setMouseUp(event) });
+			
+			document.getElementById("wheel").addEventListener("mousewheel", function(event) { mouseWheel(event); }, false);
+			document.getElementById("wheel").addEventListener("DOMMouseScroll", function(event) { mouseWheel(event); }, false);
+
+			document.getElementById("version").innerText = "Version: " + versionNumber;
+			document.getElementById("versionNoteText").innerHTML = versionNote;
+
+			loadLevel(levelID);
+			initStage();
+			startLevel();	
+		}
+		
+		function tick(event) 
+		{
+			stage.update();
+		}
+		
+		function mouseWheel(event)
+		{
+			var delta = Math.max(-1, Math.min(1, (event.wheelDelta || -event.detail)));
+			zoomStage(delta);
+			
+			return false;
+		}
+
+		function setMouseDown(event)
+		{
+			mouseX = event.stageX;
+			mouseY = event.stageY;
+			startMouseX = event.stageX;
+			startMouseY = event.stageY;
+			mouseDown = true;		
+		}
+		
+		function setMouseUp(event)
+		{
+			if(mouseDown )
+			{
+				if (Math.abs(event.stageX  - startMouseX) < 5 && Math.abs(event.stageY - startMouseY) < 5) {
+					if(windowOpen == false) 
+					{
+						doAction(event.stageX, event.stageY);
+					}	
+				}
+			}
+			mouseDown = false;
+		}
+		
+		function setMouseMove(event)
+		{
+			if(mouseDown)
+			{
+				//event.preventDefault();
+				moveStage((event.stageX - mouseX) / canvasZoom,  (event.stageY - mouseY) / canvasZoom);
+				mouseX = event.stageX;
+				mouseY = event.stageY;
+			}
+		}
+			
+	
+	</script>
+
+<style>
+
+ 
+  @-ms-viewport {
+    width: 1024px;
+    height: 655px;
+  }
+}
+</style>
+<meta name="viewport" id="viewport" content="width=1154, height=670, initial-scale=0.6, minimum-scale=0.3" />
+ </head>
+  
+  <body style="margin-top:0px; margin-left:0px; margin-bottom:0px;  padding-bottom:0px; background-color:#FFFFFF;" onLoad="init();">
+	<div style="width:1024px; height:650px; max-width:1024px; overflow:hidden; margin-left:auto; margin-right:auto; margin-top:auto; margin-bottom:auto;">
+		
+		<!-- canvas -->
+    	<div id="wheel" style="display:inline-block; width:1024px; max-height:600px; padding:0px; background-color:#FFFFFF">
+			<canvas id="container" width = "1024" height="600"> alternate content</canvas>
+        </div>
+		
+        <!-- version -->
+        <div id="version" style="position:absolute; margin-left:10px; top:30px; color:#99FF00" onClick="{document.getElementById('versionNote').style.visibility = 'visible';}">
+        	Version: 0.0
+        </div>
+        
+         <div id="versionNote" style="position:absolute; top:100px; margin-left:211px; width:600px; height:330px; border-style:solid; border-width:1px; background-color:#FFFFFF; visibility:hidden;">
+        	<div style="height:30px; width:575px; position:absolute; top:10px; left:10px; padding-left:5px; border-style:solid; border-width:1px; ">
+        		Version note
+            </div>
+            <div id="versionNoteText" style="height:220px; width:575px; position:absolute; top:50px; left:10px; padding-left:5px;  padding-top:10px; border-style:solid; border-width:1px; overflow-y:scroll">
+        		note
+        	</div>
+            
+            <div style="height:20px; width:100px; position:absolute; top:290px; left:250px; border-style:solid; border-width:1px; cursor:pointer; text-align:center" onClick="{ document.getElementById('versionNote').style.visibility = 'hidden';}">
+            	Close
+            </div>
+        </div>
+       
+       	
+       	<!-- menu -->
+         <div style="position:absolute; top:0px; margin-left:994px; width:30px; height:30px; cursor:pointer; background-image:url(img/interface/menuIco.png);" onClick="showPanel('menu')">
+         	
+         </div>
+        
+        <div id="menu" style="position:absolute; top:150px; margin-left:387px; width:250px; height:200px; background-image:url(img/interface/menu.png); visibility:hidden;">
+        	<div style="height:34px; padding-top:15px; text-align:center; cursor:pointer" onClick="{window.location = basePath}">
+            	&nbsp;
+            </div>
+            <div style="height:34px; padding-top:15px; text-align:center; cursor:pointer;" onClick="{document.getElementById('menu').style.visibility = 'hidden'; restartChapter()}">
+            	&nbsp;
+            </div>
+            <div style="height:32px; padding-top:12px; text-align:center; cursor:pointer;" onClick="{document.getElementById('menu').style.visibility = 'hidden'; restartLevel() } ">
+            	&nbsp;
+            </div>
+            <div style="height:35px; padding-top:16px; text-align:center; cursor:pointer;" onClick="{document.getElementById('menu').style.visibility = 'hidden'; }">
+            	&nbsp;
+            </div>
+        </div>
+        
+        
+        <!-- character list -->
+        <div id="charcterList" style="position:absolute; margin-left:930px; top:30px; ">			
+		</div>
+        
+         <!-- time left -->
+        <div id="timeLeftContainer" style="position:absolute; margin-left:10px; top:240px; height:200px; width:143px; background-image:url(img/interface/timeLeft.png) ">	
+        	<div id="timeLeft" style=" width:13px; height:175px; margin-left:19px; margin-top:15px; background-image:url(img/interface/timeFill.png)"> 
+            </div>		
+		</div>
+			
+		<!-- consolle left -->
+        <div id="consolleLeft" >
+            <div style="width:279px; height:175px; position:absolute; border-width:0px; top:473px; margin-left:3px; background-image:url(img/interface/consolleLeft.png) " >
+                <div id="selectedCharacterHp" style="position:absolute; width:80px; max-height:20px; top:116px; border-with:0px; left:0px; text-align:center;">
+                </div>
+    
+                <div id="selectedCharacterImage" style="position:absolute; top:8px; left:88px; width:110px; height:124px; cursor:pointer;" onClick="loadCharSheet()">	
+                </div>
+                <div id="selectedCharWeapon" style="position:absolute; top:9px; left:218px; width:55px; height:55px;" onClick="loadInventory();">
+                    &nbsp;
+                </div> 
+                <div id="selectedCharSpell" style="position:absolute; top:76px; left:218px; width:60px; height:60px; border-with:0px;">
+                    &nbsp;
+                </div>
+          
+                <div id="selectedCharacterName" style="margin-top:150px; margin-left:20px; width:277px; height:20px; border-with:0px;">
+                </div>
+            </div>
+        </div>
+        
+        
+        <!-- consolle center -->
+        <div style="margin-left:282px; width:460px; position:absolute; top:530px; height:120px; border:none; background-image:url(img/interface/consolleCenter.png); color:#000000;" >
+            
+            <div id="consolle" style="width:445px; margin-top:10px; margin-left:10px; height:105px; overflow-y:scroll; overflow-x:hidden; font-size:12px;">
+            Battle starts 
+            </div>
+           
+        </div>		
+        
+        <!-- consolle right -->
+        <div id="consolleRight" style="width:279px; height:175px; position:absolute; top:473px; margin-left:745px; background-image:url(img/interface/consolleRight.png)">
+            <div id="top" style="position:absolute;  margin-top:0px; margin-left:0px;  height:150px; width:279px">
+                <div style="margin-left:50px; margin-top:25px; width:100px; height:70px; cursor:pointer" onClick="showPanel('actionChoice');">
+                 <img id="actionImg" src="img/interface/move.png" height="75" />
+                </div>
+            
+               <div id="actionMove" style="margin-left:10px; margin-top:8px; width:150px; height:18px; font-size:18px; text-align:center; cursor:pointer; visibility:hidden " onClick="showPanel('moveChoice');" >
+                    Walk
+               </div>
+               
+               <div id="actionAttack" style="margin-left:10px; margin-top:-18px; width:150px; height:18px; font-size:18px; text-align:center; cursor:pointer; visibility:hidden" onClick="showPanel('attackChoice');" >
+                    Melee attack
+               </div>
+               
+               <div id="actionLook" style="margin-left:10px; margin-top:-18px; width:150px; height:18px; font-size:18px; text-align:center; cursor:pointer; visibility:hidden">
+                    Look/Talk/use
+               </div>
+               
+               <div id="actionUse" style="margin-left:10px; margin-top:-18px; width:150px; height:18px; font-size:18px; text-align:center; cursor:pointer; visibility:hidden">
+                    Use
+               </div>
+               
+               <div id="actionCast" style="margin-left:10px; margin-top:-18px; width:150px; height:18px; font-size:18px; text-align:center; cursor:pointer; visibility:hidden">
+                    Cast
+               </div>
+               
+               
+               <div style="position:absolute; top:10px; margin-left:190px; width:70px; height:70px; border-style:solid; border-width:0px; cursor:pointer" onClick="showPanel('inventory'); loadInventory()">
+                    <img src="img/interface/backpack.png" height="70" />
+               </div>
+               
+               <div style="position:absolute; top:88px; margin-left:182px; width:70px; height:50px; border-style:solid; border-width:0px; cursor:pointer" onClick="loadSpellBook()">
+                    <img src="img/interface/book.png"  width="70"  />
+               </div>
+             
+            </div> 
+                       
+         	<!-- consolle bottom right -->
+        	<div id="endTurn" style="postion: absolute; margin-top:150px; left:0px; width:279px; height:25px; border-width:0px; cursor:pointer;" onClick="endTurn()">
+            	
+   			</div>
+          
+        </div>
+        
+        <!-- action choice -->
+        <div id="actionChoice" style="position:absolute; top:405px; margin-left:722px; width:300px; height:60px; background-image:url(img/interface/actionChoice.png); visibility:hidden; z-index:2;">
+            <div style="margin-top:5px; margin-left:7px; cursor:pointer;" onClick="selectActionButton('move')"> <img src="img/interface/move.png"  width="50"  /> </div>
+            <div style="margin-top:5px; margin-left:65px; margin-top: -55px; cursor:pointer;" onClick="selectActionButton('attack')"> <img src="img/interface/attack.png"  width="50"  /> </div>
+            <div style="margin-top:5px; margin-left:123px; margin-top: -55px; cursor:pointer;" onClick="selectActionButton('look')"> <img src="img/interface/look.png"  width="50"  /> </div>
+            <div style="margin-top:5px; margin-left:181px; margin-top: -55px; cursor:pointer;" onClick="selectActionButton('use')"> <img src="img/interface/use.png"  width="50"  /> </div>
+            <div style="margin-top:5px; margin-left:239px; margin-top: -55px; cursor:pointer;" onClick="selectActionButton('cast')"> <img src="img/interface/cast.png"  width="50"  /> </div>   
+        </div>
+         
+        <!-- move choice -->
+        <div id="moveChoice" style="position:absolute;top:405px; margin-left:722px; width:300px; height:60px; border-width:0px; font-size:14px;  background-image:url(img/interface/actionChoice.png); visibility:hidden;">
+        	
+            <div id="moveWalk" style="width:50px; height:20px; margin-top:10px; margin-left:20px; cursor:pointer;"  onClick="{document.getElementById('moveChoice').style.visibility = 'hidden'; selectMoveStyle('walk');}">
+            	   Walk     
+            </div>
+             <div id="moveStep" style="width:50px; height:20px; margin-top:-20px; margin-left:117px; cursor:pointer;"  onClick="{document.getElementById('moveChoice').style.visibility = 'hidden'; selectMoveStyle('step')}">
+            	   Step        
+            </div>
+             <div id="moveRun" style="width:50px; height:20px; margin-top:-20px; margin-left:210px; cursor:pointer;"  onClick="{document.getElementById('moveChoice').style.visibility = 'hidden'; selectMoveStyle('run')}">
+            	   Run      
+            </div>
+             <div id="moveRetreat" style="width:80px; height:20px; margin-top:2px; margin-left:20px; cursor:pointer;"  onClick="{document.getElementById('moveChoice').style.visibility = 'hidden'; selectMoveStyle('retreat')}">
+            	    Retreat     
+            </div>
+             <div id="moveSneak" style="width:60px; height:20px; margin-top:-20px; margin-left:117px; cursor:pointer;"  onClick="{document.getElementById('moveChoice').style.visibility = 'hidden'; selectMoveStyle('sneak')}">
+            	   Sneak    
+            </div>
+        </div>
+        
+        <!-- attack choice -->
+        <div id="attackChoice" style="position:absolute;top:405px; margin-left:722px; width:300px; height:60px; font-size:14px; background-image:url(img/interface/actionChoice.png); visibility:hidden">
+            <div id="attackMelee" style="width:100px; height:20px; margin-top:10px; margin-left:20px; cursor:pointer" onClick="{document.getElementById('attackChoice').style.visibility = 'hidden'; selectAttackStyle('melee');}">
+            	 Melee attack       
+            </div>
+             <div id="attackRanged" style="width:120px; height:20px; margin-top:-20px; margin-left:144px; cursor:pointer" onClick="{document.getElementById('attackChoice').style.visibility = 'hidden'; selectAttackStyle('ranged');}">
+            	  Ranged attack       
+            </div>
+             <div id="attackCharge" style="width:60px; height:20px; margin-top:2px; margin-left:20px; cursor:pointer" onClick="{document.getElementById('attackChoice').style.visibility = 'hidden'; selectAttackStyle('charge');}">
+            	  Charge        
+            </div>
+             <div id="attackPush" style="width:100px; height:20px; margin-top:-20px; margin-left:144px; cursor:pointer" onClick="{document.getElementById('attackChoice').style.visibility = 'hidden'; selectAttackStyle('push');}">
+            	  Push attack       
+            </div>
+        </div>     
+
+        <!-- zoom and move icons -->
+        <div style=" width:20px; height:20px; position:absolute; margin-left:10px; top:200px; cursor:pointer;" onClick="moveCanvasLeft()" > <img src="img/interface/dirArrowLEFT.png" width ="20" height = "20"></div>
+        <div style=" width:20px; height:20px; position:absolute; margin-left:900px; top:200px;  cursor:pointer;" onClick="moveCanvasRight()" > <img src="img/interface/dirArrowRIGHT.png" width ="20" height = "20"></div>
+        <div style=" width:20px; height:20px; position:absolute; margin-left:512px; top:500px;  cursor:pointer;" onClick="moveCanvasDown()"   > <img src="img/interface/dirArrowDOWN.png" width ="20" height = "20"></div>
+        <div style=" width:20px; height:20px; position:absolute; margin-left:512px; top:10px; cursor:pointer;" onClick="moveCanvasUp()"   > <img src="img/interface/dirArrowUP.png" width ="20" height = "20"></div>
+        
+        <div style=" width:20px; height:20px; position:absolute; margin-left:900px; top:20px;  cursor:pointer;" onClick="zoomCanvasIn()"   > <img src="img/interface/zoomIn.png" width ="20" height = "20"></div>
+        <div style=" width:20px; height:20px; position:absolute; margin-left:900px; top:40px; cursor:pointer;" onClick="zoomCanvasOut()"  > <img src="img/interface/zoomOut.png" width ="20" height = "20"></div>
+                  
+        <!-- inventory -->
+        <div id="inventory" style="position:absolute; top:30px; margin-left:211px; width:600px; height:600px; background-image:url(img/interface/inventory.png); visibility:hidden;">
+            
+            <div style="height:20px; width:25px; position:absolute; top:11px; left:550px;  cursor:pointer" onClick="{windowOpen = false; document.getElementById('inventory').style.visibility = 'hidden'}">
+               
+            </div>
+            
+            <div style="height:370px; width:320px; position:absolute; top:40px; left:10px;">
+                <div id="headSlot" style="width:60px; height:60px; position:absolute; top:19px; left:140px;" onClick="equipItem('head')">
+                </div>
+                <div id="glovesSlot" style="width:40px; height:40px; position:absolute; top:67px; left:50px;" onClick="equipItem('gloves')">
+                </div>
+                <div id="amuletSlot" style="width:35px; height:35px; position:absolute; top:72px; left:249px;" onClick="equipItem('amulet')">
+                </div>
+                <div id="leftHandSlot" style="width:75px; height:75px;  position:absolute; top:138px; left:25px;"  onClick="equipItem('leftHand')">
+                </div>
+                <div id="armorSlot" style="width:80px; height:140px; position:absolute; top:109px; left:133px;" onClick="equipItem('armor')">
+                </div>
+                <div id="rightHandSlot" style="width:75px; height:75px;  position:absolute; top:138px; left:240px;" onClick="equipItem('rightHand')"> 
+                </div>
+                <div id="leftRingSlot" style="width:40px; height:40px; position:absolute; top:232px; left:50px;" onClick="equipItem('leftRing')">
+                </div>
+                <div id="rightRingSlot" style="width:40px; height:40px; position:absolute; top:233px; left:248px;" onClick="equipItem('rightRing')">
+                </div>
+                <div id="bootsSlot" style="width:60px; height:60px; position:absolute; top:270px; left:140px;" onClick="equipItem('boots')">
+                </div>
+            </div>
+            
+            <div id="changeHand" style="height:31px;  width:230px; position:absolute; top:46px; left:350px;  background-image:url(img/interface/selectHand.png);">
+                <div id="changeHandLeft" style="width:25px; height:24px;  position:absolute; top:3px; left:7px; cursor:pointer; background-image:url(img/interface/changeLeft.png);" onClick="changeSelectedHand('left')">
+                    
+                </div>
+                <div id="rightHandInUse" style="width: 151px; height:20px; text-align:center; position:relative; top:5px; left:40px; " >
+                    Use right hand
+                </div>
+                <div id="leftHandInUse" style="width: 151px; height:20px; text-align:center; position:absolute; top:5px; left:40px; " >
+                    Use left hand
+                </div>
+                <div id="bothHandInUse" style="width: 151px; height:20px; text-align:center; position:absolute; top:5px; left:40px; " >
+                    Use two hands
+                </div>
+                
+                <div id="changeHandRight" style="width:24px; height:24px; position:absolute; top:3px; left:195px; cursor:pointer; background-image:url(img/interface/changeRight.png);" onClick="changeSelectedHand('right')">
+                   
+                </div>
+            </div>
+
+            <div id="selectedItemDetails" style="height:335px; width:240px; position:absolute; top:80px; left:345px; background:url(img/interface/itemDetails.png); display:none">
+                <div id="selectedWeaponImage" style="width:50px; height:50px; position:absolute; top:17px; left:16px;">
+                </div>
+                
+                <div id="selectedWeaponName" style="width:150px; height:50px; width:145px; position:absolute; top:18px; left:82px;">
+                </div>
+                
+                <div id="selectedWeaponDetails" style="width:220px; height:245px; position:absolute; top:80px; left:5px;">
+                </div>
+                
+                <div id="unequip" style="width:107px; height:20px; position:absolute; margin-top:300px; margin-left:70px; background-image:url(img/interface/unequpiButton.png); cursor:pointer">
+				
+                </div>
+            </div>
+            
+            <div style="height:170px; width:580px; position:absolute; top:422px; left:5px;">
+                <div style="width:560px; margin-left:15px; height:130px; height:20px;">
+          
+                    <div style="width:190px; height:20px; padding-left:5px">
+                        Name
+                    </div>
+                    <div style="width:190px; height:20px; position:absolute; top:0px; left:200px;">
+                        Type
+                    </div>
+                    <div style="width:199px; height:20px; position:absolute; top:0px; left:388px;">
+                        Reach
+                    </div>
+             
+                </div>
+                <div id="objectList" style="width:560px; margin-top:6px; margin-left:4px; height:130px; max-height:130px; overflow-y:scroll">
+                    &nbsp;
+                </div>
+            </div>
+            
+        </div>
+        
+        <!-- character sheet -->          
+         <div id="charSheet" style="position:absolute; top:30px; margin-left:211px; width:600px; height:600px; background-image:url(img/interface/charsheet.png); font-size:10px; visibility:hidden;">
+              
+         	 <div style="height:20px; width:22px; height:22px; position:absolute; top:10px; left:560px; cursor:pointer" onClick="{windowOpen = false; document.getElementById('charSheet').style.visibility = 'hidden'}">
+               
+          	 </div>
+          
+          	<div style="position:absolute; top:10px; left:12px;">
+              <div id="charSheet_name" style="position:absolute; padding-left:5px; top:42px; height:20px; width:300px;">
+              
+              </div>
+              <div style="position:absolute; left:400px; top:40px; height:20px; width:100px;">
+             	 xp : 
+              	<div id="charSheet_xp" style="position:absolute; top:0px; left:20px; height:20px; width:100px;">
+             		1000
+              	</div>
+              </div>
+              
+              <div style="position:absolute;  left:490px; top:40px; height:20px; width:100px;">
+              	gold : 
+                  <div id="charSheet_gold" style="position:absolute; top:0px; left:25px; height:20px; ">
+                   1000 
+                  </div> 
+              </div>
+  
+              <div style="position:absolute; top:68px; left:1px;" >
+                <div style="position:absolute; top:0px; left:0px; padding-top:2px; padding-left:5px;  width: 195px; height: 18px;"> Human male</div>
+                <div style="position:absolute; top:0px; left:216px; padding-top:2px; padding-left:5px; width: 349px; height: 18px;"> Cleric  level 1 / Thief level 1</div>
+          	  </div>
+              
+              <div id="charSheet_img" style="position:absolute; top:90px; left:1px; padding-left:6px; padding-top:6px; width:194px; height:193px;">
+              	<img src="img/level1/Tzel.png" height="190" width="190" />
+                </div>
+              
+  			  <div style="position:absolute; top: 90px; left:219px; padding-left:4px; padding-top:2px;  width: 350px; height: 195px;">
+    		  	<div style="height:30px; margin-top:10px;"> Strength </div> <div id="charSheet_str" style="height:30px; margin-top:-30px; margin-left:150px" > 16 </div> <div id="charSheet_strMod" style="height:30px; margin-top:-30px; margin-left:200px" > + 2 </div>
+            	<div style="height:30px"> Dexterity </div> <div id="charSheet_dex" style="height:30px; margin-top:-30px; margin-left:150px" > 16 </div> <div id="charSheet_dexMod" style="height:30px; margin-top:-30px; margin-left:200px" > + 2 </div>
+            	<div style="height:30px"> Constitution </div> <div id="charSheet_cos" style="height:30px; margin-top:-30px; margin-left:150px" > 16 </div> <div id="charSheet_cosMod" style="height:30px; margin-top:-30px; margin-left:200px" > + 2 </div>
+            	<div style="height:30px"> Intelligence </div> <div id="charSheet_int" style="height:30px; margin-top:-30px; margin-left:150px" > 16 </div> <div id="charSheet_intMod" style="height:30px; margin-top:-30px; margin-left:200px" > + 2 </div>
+            	<div style="height:30px"> Wisdom </div> <div id="charSheet_wis" style="height:30px; margin-top:-30px; margin-left:150px" > 16 </div> <div id="charSheet_wisMod" style="height:30px; margin-top:-30px; margin-left:200px" > + 2 </div>
+            	<div style="height:30px"> Charisma </div> <div id="charSheet_cha" style="height:30px; margin-top:-30px; margin-left:150px" > 16 </div> <div id="charSheet_chaMod" style="height:30px; margin-top:-30px; margin-left:200px" > + 2 </div>
+      		  </div>
+               <div style="position:absolute; top: 292px; left:1px; padding-left:2px; padding-top:2px; width: 280px; height: 18px;">  
+                Combat values 
+              </div>
+    		  <div style="position:absolute; top: 310px; left:1px; padding-left:2px; padding-top:2px;  width: 279px; height: 58px;">    
+       			<div  style="margin-left:5px; height:20px;"> Hit points  </div>  <div id="charSheet_HP" style="height:20px; margin-top:-20px; margin-left: 150px;"> 36 </div>
+        		<div  style="margin-left:5px; height:20px;"> Attack  </div>  <div id="charSheet_Attack" style="height:20px; margin-top:-20px; margin-left: 150px;"> 5 </div>
+        		<div  style="margin-left:5px; height:20px;"> Armor class  </div> <div id="charSheet_AC" style="height:20px; margin-top:-20px; margin-left: 150px;"> 17 </div>
+     		  </div>
+              
+              <div style="position:absolute; top: 291px; left:295px; padding-left:2px; padding-top:2px; width: 280px; height: 18px;"> 
+              Saving throws     
+              </div>
+  			  <div style="position:absolute; top: 309px; left:295px; padding-left:2px; padding-top:2px;  width: 276px; height: 58px;"> 
+     			
+    			<div style="margin-left:5px; height:20px;"> Reflex </div> <div id="charSheet_tsRef" style="height:20px; margin-top:-20px; margin-left: 150px;"> 2 </div>
+            	<div style="margin-left:5px; height:20px;"> Fortitude </div> <div id="charSheet_tsFor" style="height:20px; margin-top:-20px; margin-left: 150px;"> 2 </div>
+            	<div style="margin-left:5px; height:20px;"> Will </div> <div id="charSheet_tsWill" style="height:20px; margin-top:-20px; margin-left: 150px;"> 1 </div>
+     		  </div>
+              
+     			<div style="position:absolute; top:380px; left:3px; height:10px;">Skills</div>
+     		  <div style="position:absolute; top:392px; left:1px; padding-left:2px; padding-top:2px; width: 573px; height: 60px;">     
+     			     
+              </div>
+              	<div style="position:absolute; top:458px; left:3px; height:10px;">Feats</div> 
+      		  <div style="position:absolute; top:470px; left:1px; padding-left:2px; padding-top:2px;  width: 573px; height: 35px;">     
+     			    
+              </div>
+     			<div style="position:absolute; top:509px; left:3px; height:10px; ">Description</div>
+                  <div id="charSheet_description" style="position:absolute; top:519px; left:1px; padding-left:6px; padding-top:2px; width: 565px; height: 52px; overflow-y:scroll">     
+     			    
+             </div>
+     
+		</div>
+      </div>
+        
+        <!-- spellBook -->
+        <div id="spellBook" style="position:absolute; top:30px; margin-left:211px; width:600px; height:600px; background-image:url(img/interface/spellbook.png); visibility:hidden;">
+           
+          <div style="height:20px; width:20px; position:absolute; top:15px; left:564px; cursor:pointer;" onClick="{windowOpen = false; document.getElementById('spellBook').style.visibility = 'hidden'}">
+                
+          </div>
+          <div style="position:absolute; left: 7px; padding-left:5px; top: 45px; width: 570px; height: 188px;"> 
+              Selected spell
+          	<div id="selectedSpell" style="position:absolute; padding-left:5px; padding-top:5px; left: 4px; top: 21px; width: 568px; height: 183px;">
+                <div id="spellImage" style="position:absolute; "> 
+                        
+                </div>
+        	
+                <div style="position:absolute; left: 127px; top: 7px; width: 460px; height: 116px;">
+                    <div style="margin-left:10px; width:150px; height:20px; margin-top:0px;"> Name </div> <div id="selectedSpellName" style="margin-top:-20px; margin-left:160px;"> Dardo incantato </div>
+                    <div style="margin-left:10px; width:150px; height:20px;"> Spell level </div> <div id="selectedSpellLevel" style="margin-top:-20px; margin-left:160px;"> 1 </div>
+                    <div style="margin-left:10px; width:150px; height:20px;"> Range </div> <div id="selectedSpellRange" style="margin-top:-20px; margin-left:160px;"> 1 </div>
+                    <div style="margin-left:10px; width:150px; height:20px;"> Effect Area</div> <div id="selectedSpellEffectArea" style="margin-top:-20px; margin-left:160px;"> Un nemico </div>
+                    <div id="selectedSpellDamageTitle" style="margin-left:10px; width:150px; height:20px;"> Damage </div> <div id="selectedSpellDamage" style="margin-top:-20px; margin-left:160px;"> 2d4 + 2 </div>
+                    <div style="margin-left:10px; width:150px; height:20px;"> Saving throw </div> <div id="selectedSpellSavingThrow" style="margin-top:-20px; margin-left:160px;"> No </div>
+                 </div>
+                <div style="position:absolute; left: 7px; top: 130px; width: 122px;"> Description: </div>
+                <div id="selectedSpellDescription" style="position:absolute; top: 150px; width: 588px; height: 70px; left: 7px;">
+                    Descrizione dell'incantesimo        
+                </div>
+      	  </div>
+          <div id="used" style="margin-left:250px; width:300px; height:200px; z-index:2; background-image:url(img/interface/used.png); display:none;">
+          </div>
+  	   </div>
+       
+       <div style="position:absolute; left: 12px; top: 262px; width: 572px; height: 18px;">
+         Spellbook  
+       </div>
+       <div style="position:absolute; left: 12px; top: 282px; width: 572px; height: 303px; font-size:12px;">
+       
+       
+           <div style="position:absolute; left: 0px; top:2px; width: 570px; height: 260px; overflow-y:scroll;">
+          
+               <div style="position:absolute; top:5px; left:7px;">level 1</div>
+               <div  style="width:545px; height:100px; position:absolute; top:20px; margin-left:5px; background-image:url(img/interface/spellBookLevel.png);">
+                   <div id ="level1Spells" style="margin-left:1px; margin-top:10px; width:535px; height:85px; overflow-y:scroll">
+                  
+                   </div>
+               </div>
+              
+                <div style="position:absolute; top:130px; left:7px;">level 2</div>
+               <div  style="width:545px; height:100px; position:absolute; top:145px; margin-left:5px; background-image:url(img/interface/spellBookLevel.png);">
+                   <div id ="level2Spells" style="margin-left:1px; margin-top:10px; width:535px; height:85px; overflow-y:scroll">
+                  
+                   </div>
+               </div>
+               
+               <div style="position:absolute; top:255px; left:7px;">level 3</div>
+               <div  style="width:545px; height:100px; position:absolute; top:270px; margin-left:5px; background-image:url(img/interface/spellBookLevel.png);">
+                   <div id ="level3Spells" style="margin-left:1px; margin-top:10px; width:535px; height:85px; overflow-y:scroll">
+                  
+                   </div>
+               </div>
+               
+               <div style="position:absolute; top:380px; left:7px;">level 4</div>
+               <div  style="width:545px; height:100px; position:absolute; top:395px; margin-left:5px; background-image:url(img/interface/spellBookLevel.png);">
+                   <div id ="level4Spells" style="margin-left:1px; margin-top:10px; width:535px; height:85px; overflow-y:scroll">
+                  
+                   </div>
+               </div>
+               
+               <div style="position:absolute; top:505px; left:7px;">level 5</div>
+               <div  style="width:545px; height:100px; position:absolute; top:520px; margin-left:5px; background-image:url(img/interface/spellBookLevel.png);">
+                   <div id ="level5Spells" style="margin-left:1px; margin-top:10px; width:535px; height:85px; overflow-y:scroll">
+                  
+                   </div>
+               </div>
+      </div>
+       </div>
+  
+</div>
+
+        <!-- use & talk -->
+        <div id="useAndTalk" style="position:absolute; top:100px; margin-left:111px; width:800px; height:330px; background-image:url(img/interface/lookAndUse.png); visibility:hidden;">
+            <div id="useAndTalkTitle"  style="height:25px; width:700px; position:absolute; top:15px; left:20px; padding-left:5px;">
+                oggetto
+            </div>
+            <div style="height:25px; width:25px; position:absolute; top:13px; left:754px; cursor:pointer;" onClick="{windowOpen = false; document.getElementById('useAndTalk').style.visibility = 'hidden'; document.getElementById('useAndTalkActions').style.display = 'none'; document.getElementById('useAndTalkActionsTitle').style.display = 'none'}">
+            
+            </div>
+            <div style="height:105px; width:754px; position:absolute; top:50px; left:20px; padding-left:5px; ">
+                <div id="useAndTalkDescription" style="height:100px; overflow-y:scroll">
+                    Description
+                </div>
+            </div>
+            
+            <div id="useAndTalkActionsTitle"  style="height:25px; width:755px; position:absolute; top:170px; left:20px; padding-left:5px;">
+                Azioni possibili
+            </div>
+            
+            <div style="height:110px; width:755px; position:absolute; top:205px; left:20px; padding-left:5px;">
+                <div id="useAndTalkActions" style="height:105px; width:750px; overflow-y:scroll">
+                    Use list
+                </div>
+            </div>
+        </div>
+        
+         <!-- current round -->
+         <div id="round" style="position:absolute; top:0px; margin-left:0px; width:60px; height:18px; padding-left:5px; background-color:#FFF;">
+         	Round 1
+         </div>
+         
+        <!-- level name -->
+        <div id="levelName" style="position:absolute; top:0px; margin-left:70px; width:200px; height:18px; padding-left:5px; background-color:#FFF;"></div>
+         
+        
+         <!-- PC talk -->
+         <div id="PCTalk" style="position:absolute; top:40px; margin-left:10px; width:600px; height:200px; background-image:url(img/interface/PCTalks.png); cursor:pointer; z-index:20; visibility:hidden" onClick="{document.getElementById('PCTalk').style.visibility = 'hidden'}">
+             <div id="PCTalkImage" style="position:absolute; top:50px; margin-left:6px; width:100px; height:100px;">
+
+             </div>
+             <div id="PCTalkPhrase" style="position:absolute; top:10px; margin-left:115px; width:465px; height:180px;  padding-left:2px">
+             	frase
+             </div>
+         </div>
+         
+         <!-- NPC talk -->
+         <div id="NPCTalk" style="position:absolute; top:250px; margin-left:410px; width:600px; height:200px; background-image:url(img/interface/NPCTalks.png); z-index:20; cursor:pointer; visibility:hidden" onClick="{document.getElementById('NPCTalk').style.visibility = 'hidden'}">
+			<div id="NPCTalkPhrase" style="position:absolute; top:10px; margin-left:10px; width:465px; height:180px; padding-left:2px">
+             	frase
+             </div>   
+              <div id="NPCTalkImage" style="position:absolute; top:50px; margin-left:490px; width:100px; height:100px;">
+
+             </div>      
+         </div>
+         
+          <!-- PC talk -->
+         <div id="tutorial" style="position:absolute; top:280px; margin-left:10px; width:600px; height:200px; background-image:url(img/interface/PCTalks.png); cursor:pointer; z-index:20; visibility:hidden" onClick="{document.getElementById('PCTalk').style.visibility = 'hidden'}">
+             <div id="tutorialPhrase" style="position:absolute; top:10px; margin-left:5px; width:565px; height:180px;  padding-left:2px">
+             	un po di fradi del tutorial che ti spiega queto e quello un po di fradi del tutorial che ti spiega queto e quello un po di fradi del tutorial che ti spiega queto e quello un po di fradi del tutorial che ti spiega queto e quello un po di fradi del tutorial che ti spiega queto e quello un po di fradi del tutorial che ti spiega queto e quello un po di fradi del tutorial che ti spiega queto e quello un po di fradi del tutorial che ti spiega queto e quello un po di fradi del tutorial che ti spiega queto e quello un po di fradi del tutorial che ti spiega queto e quello un po di fradi del tutorial che ti spiega queto e quello un po di fradi del tutorial che ti spiega queto e quello
+             </div>
+         </div>
+
+		<!-- level description -->        
+        <div id="levelDescription" style="position:absolute; top:100px; margin-left:211px; width:600px; height:325px; background-image:url(img/interface/startMission.png); visibility:true;">
+        	<div  id="levelDescription_name" style="height:30px; width:550px; position:absolute; top:18px; left:20px;">
+        		level name
+            </div>
+            <div  id="levelDescription_description" style="height:200px; width:557px; position:absolute; top:62px; left:20px;  overflow-y:scroll;">
+        		level description
+        	</div>
+            
+            <div style="height:20px; width:108px; position:absolute; top:290px; left:250px; cursor:pointer; text-align:center; background-image:url(img/interface/startLevelButton.png)" onClick="{ document.getElementById('levelDescription').style.visibility = 'hidden'; startFight();}">
+            	&nbsp;
+            </div>
+        </div>
+        
+        <!-- level end vittory/defeat -->        
+        <div id="levelEnd" style="position:absolute; top:100px; margin-left:211px; width:600px; height:325px; background-image:url(img/interface/startMission.png); z-index:20; visibility:hidden;">
+        	<div  id="levelEnd_result" style="height:30px; width:550px; position:absolute; top:18px; left:20px;">
+        		win/lost
+            </div>
+            <div  id="levelEnd_descriptionContainer" style="height:200px; width:557px; position:absolute; top:62px; left:20px; overflow-y:scroll;">
+                <div id="levelEnd_description">
+                    win/lost description
+                </div>
+        		
+                <div id="levelEnd_experience" style="height:150px; width:557px; margin-top:15px;  visibility:hidden">
+                    Esperienza:
+                </div>
+        	</div>
+            
+            
+            <div style="height:20px; width:108px; position:absolute; top:290px; left:180px; cursor:pointer; text-align:center; background-image:url(img/interface/restartLevel.png)" onClick="{document.getElementById('levelEnd').style.visibility = 'hidden'; restartChapter()}">
+            	&nbsp;
+            </div>
+            
+            <div style="height:20px; width:108px; position:absolute; top:290px; left:320px; cursor:pointer; text-align:center; background-image:url(img/interface/loadWaypointButton.png)" onClick="{document.getElementById('levelEnd').style.visibility = 'hidden'; restartLevel()}">
+            	&nbsp;
+            </div>
+            
+      </div>  
+        
+        <!-- object name -->
+        <div id="objectContainer" style=" background-image:url(img/interface/object.png); width:200px; height:30px; position:absolute; top:250px; margin-left:510px; z-index:10; display:none;">
+        	<div id="object" style = "margin-top:5px; margin-left:5px;">
+            	
+            </div>
+        </div>      	
+    </div>
+
+    <script>
+	
+		function restartChapter()
+		{		
+			backgroundContainer.removeAllChildren();
+			playersContainer.removeAllChildren();
+			spriteContainer.removeAllChildren();
+			objectsContainer.removeAllChildren();
+			aureasContainer.removeAllChildren();
+			
+			mapImage = null;
+		
+		
+		
+			document.getElementById("consolle").innerHTML = "Battle starts";
+			document.getElementById('NPCTalk').style.visibility = 'hidden'
+			document.getElementById('PCTalk').style.visibility = 'hidden'
+			
+			loadLevel(levelID);
+			currentRound = 1;
+			
+			initStage();
+			gameOver = false;
+					
+			startLevel();	
+		}
+		
+		function restartLevel()
+		{
+		    restartChapter(); // temp
+		    // restar level not working at the moment 
+
+			//backgroundContainer.removeAllChildren();
+			//playersContainer.removeAllChildren();
+			//spriteContainer.removeAllChildren();
+			//objectsContainer.removeAllChildren();
+			//aureasContainer.removeAllChildren();
+			
+
+			
+			//document.getElementById("consolle").innerHTML = "Battle starts";
+			//document.getElementById('NPCTalk').style.visibility = 'hidden'
+			//document.getElementById('PCTalk').style.visibility = 'hidden'
+			
+			//selectStage(currentStage.id);
+			////loadHeroes();		
+			//initStage();
+			//gameOver = false;
+			
+			//currentRound = 1;
+			//document.getElementById("round").innerHTML = "Round " + currentRound;
+			//document.getElementById("levelName").innerHTML = chapterName + " - level " + level;
+			//actionOnGoing = true;
+			//throwInitiative();	
+			
+			//activeCharacter = players[0];
+			//roundSetter = activeCharacter;
+			
+			//drawCharImageList();
+			//drawConsolleItems();
+			
+			//setCharactersSizeCircle();
+			//setZoom(0.7);
+			//levelState = "startState";
+					
+			//startFight();	
+		}
+		
+		function changeLevel(stage, startPosition)
+		{
+			backgroundContainer.removeAllChildren();
+			playersContainer.removeAllChildren();
+			spriteContainer.removeAllChildren();
+			objectsContainer.removeAllChildren();
+			aureasContainer.removeAllChildren();
+			
+			document.getElementById("consolle").innerHTML = "Battle starts";
+			document.getElementById('NPCTalk').style.visibility = 'hidden'
+			document.getElementById('PCTalk').style.visibility = 'hidden'
+			
+			for(var i = 0; i < stages.length; i++)
+			{
+			    if (stages[i].id == stage)
+				{
+					currentStage = stages[i];
+				}
+			}
+			
+			selectStage(currentStage.id, startPosition);
+			//loadHeroes();		
+			initStage();
+			gameOver = false;
+			
+			currentRound = 1;
+			document.getElementById("round").innerHTML = "Round " + currentRound;
+			document.getElementById("levelName").innerHTML = chapterName + " - level " + stage;
+			actionOnGoing = true;
+			throwInitiative();	
+			
+			activeCharacter = players[0];
+			roundSetter = activeCharacter;
+			
+			drawCharImageList();
+			drawConsolleItems();
+			
+			setCharactersSizeCircle();
+			setZoom(0.7);
+			levelState = "start" + stage.id + "State";
+					
+			startFight();	
+		}
+		
+		function nextLevel()
+		{
+			saveHeroes();
+			
+			backgroundContainer.removeAllChildren();
+			playersContainer.removeAllChildren();
+			spriteContainer.removeAllChildren();
+			objectsContainer.removeAllChildren();
+			aureasContainer.removeAllChildren();
+			
+			mapImage = null;
+			players = new Array();
+			objects = new Array();
+			walls = new Array();
+			weaponSprites = new Array();
+			timedEvents = new Array();
+			
+			document.getElementById("consolle").innerHTML = "Battle starts";
+			document.getElementById('NPCTalk').style.visibility = 'hidden'
+			document.getElementById('PCTalk').style.visibility = 'hidden'
+			level ++;
+			loadLevel(levelID);
+		//	loadHeroes();		
+			initStage();
+			gameOver = false;
+			
+			currentRound = 1;
+			document.getElementById("round").innerHTML = "Round " + currentRound;
+			document.getElementById("levelName").innerHTML = chapterName + " - level " + level;
+			actionOnGoing = true;
+			throwInitiative();	
+			
+			activeCharacter = players[0];
+			roundSetter = activeCharacter;
+			
+			drawCharImageList();
+			drawConsolleItems();
+			
+			setCharactersSizeCircle();
+			setZoom(0.7);
+			//levelState = "startState";
+					
+			startFight();
+		}
+		
+		function startLevel()
+		{
+			currentRound = 1;
+			document.getElementById("round").innerHTML = "Round " + currentRound;
+			document.getElementById("levelName").innerHTML = chapterName + " - level " + level;
+			actionOnGoing = true;
+			throwInitiative();	
+			
+			activeCharacter = players[0];
+			roundSetter = activeCharacter;
+			
+			drawCharImageList();
+			drawConsolleItems();
+			showStartScreen();
+			
+			setCharactersSizeCircle();
+			setZoom(0.7);
+			levelState = "start" + currentStage.id + "State";
+			
+			tutorial();
+		}
+		
+		function showStartScreen()
+		{
+			document.getElementById("levelDescription_name").innerHTML = chapterName;
+			document.getElementById("levelDescription_description").innerHTML = levelDescription;
+			document.getElementById("levelDescription").style.visibility = "visible";		
+		}
+		
+		function startFight()
+		{
+			actionOnGoing = false;
+			moveStageOnChar(activeCharacter);
+			selectAction('walk');
+
+			activeCharacter.character.minorActionDone = false;
+			activeCharacter.character.moveActionDone = false;
+			activeCharacter.character.standardActionDone = false;
+			activeCharacter.character.moveDone = 0;
+			
+			setCharactersSizeCircle();
+			
+			checkTalkingSituation(null);
+				
+			if(activeCharacter.type == "NPC")
+			{
+				AIWaiter();
+			}	
+		}
+		
+		function throwInitiative()
+		{
+			if(randomInitiative)
+			{
+				for(var i = 0; i < players.length; i ++)
+				{
+					players[i].initiative = Math.floor(Math.random() * (20 - 1) + 1);
+				}
+			}
+				
+			players = players.sort(function(a, b){
+			 return b.initiative-a.initiative
+			});		
+				
+		}
+							
+		function selectAction(action)
+		{	
+			actionSelected = action;
+			if(actionSelected == "walk" || actionSelected == "step" || actionSelected == "run" || actionSelected == "retreat" || actionSelected == "sneak")
+			{
+				for(var i = 0; i < players.length; i ++)
+				{
+					players[i].castCircle.visible = false;
+					
+					if (players[i].id == activeCharacter.id)
+					{
+						players[i].reachCircle.visible = false;
+						players[i].moveCircle.visible = true;
+						
+						players[i].moveCircle.graphics.clear();
+						
+						var size = 0
+						
+						if(players[i].character.selectedMoveStyle == "walk")
+						{
+							if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.action == actionSelected && activeCharacter.onGoingAction.actionType == activeCharacter.character.selectedMoveStyle)
+						var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, null, "move");
+					else
+						var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "move");						
+							if(timeForAction)
+							{
+								if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.actionType == "walk")
+									size = (activeCharacter.character.maxMove * meterEquivalence - activeCharacter.character.moveDone);	
+								else
+									size = (activeCharacter.character.maxMove * meterEquivalence);	
+							}			
+						}
+						if(players[i].character.selectedMoveStyle == "step")
+						{
+							if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.action == actionSelected && activeCharacter.onGoingAction.actionType == activeCharacter.character.selectedMoveStyle)
+								var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, null, "minor");
+							else
+								var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "minor");
+								
+							if(timeForAction)
+							{	
+								size = meterEquivalence;
+							}
+						}
+						
+						if(players[i].character.selectedMoveStyle == "run" )
+						{
+						
+							if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.action == actionSelected && activeCharacter.onGoingAction.actionType == activeCharacter.character.selectedMoveStyle)
+								var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, null, "full");
+							else
+								var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "full");
+							if(timeForAction)
+							{	
+								if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.actionType == "run")
+									size = (activeCharacter.character.maxMove * 3 * meterEquivalence - activeCharacter.character.moveDone);
+								else
+									size = (activeCharacter.character.maxMove * 3 * meterEquivalence);
+							}
+						}
+						
+						if(players[i].character.selectedMoveStyle == "retreat" )
+						{
+							if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.action == actionSelected && activeCharacter.onGoingAction.actionType == activeCharacter.character.selectedMoveStyle)
+								var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, null, "full");
+							else
+								var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "full");
+							if(timeForAction)
+							{	
+								if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.actionType == "retreat")
+									size = (activeCharacter.character.maxMove * meterEquivalence - activeCharacter.character.moveDone);
+								else
+									size = (activeCharacter.character.maxMove * meterEquivalence);
+							}
+						}
+						
+						if(players[i].character.selectedMoveStyle == "sneak" && (!players[i].character.moveActionDone || !players[i].character.standardActionDone))
+						{
+							if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.action == actionSelected && activeCharacter.onGoingAction.actionType == activeCharacter.character.selectedMoveStyle)
+								var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, null, "move");
+							else
+								var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "move");
+							if(timeForAction)
+							{
+								if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.actionType == "sneak")
+									size = (activeCharacter.character.maxMove / 2 * meterEquivalence - activeCharacter.character.moveDone);
+								else
+									size = (activeCharacter.character.maxMove / 2 * meterEquivalence);
+							}
+						}
+						
+						activeCharacter.moveCircle.graphics.setStrokeStyle(1).beginFill("green").drawCircle(0, 0, size).endStroke();
+					}
+					else if(players[i].character.alive == true && players[i].type == "NPC")
+					{
+						var enemyTeam = false;
+						for(var j = 0; j < players[i].character.team.teamRelations.length; j++)
+						{
+							if(players[i].character.team.teamRelations[j].team == activeCharacter.character.team.name)
+							{
+								if(players[i].character.team.teamRelations[j].attitude == "enemy")
+								{
+									enemyTeam = true;
+								}
+								break;
+							}
+						}
+						
+						if(enemyTeam && timeForAction && (activeCharacter.character.selectedMoveStyle == "run" || activeCharacter.character.selectedMoveStyle == "walk" || activeCharacter.character.selectedMoveStyle == "sneak" ))
+							players[i].reachCircle.visible = true;
+						else
+							players[i].reachCircle.visible = false;
+							
+							
+						players[i].moveCircle.visible = false;
+					}
+				}
+			}
+			
+			if(actionSelected == "melee" || actionSelected == "ranged" || actionSelected == "push" || actionSelected == "charge")
+			{
+				
+				if(activeCharacter.character.selectedAttackStyle == "melee")
+				{
+					activeCharacter.moveCircle.visible = false;
+					
+					for(var i = 0; i < players.length; i ++)
+					{
+						players[i].castCircle.visible = false;
+						
+						if (players[i].id == activeCharacter.id)
+						{
+							players[i].reachCircle.visible = true;					 
+						}
+						else
+						{
+							players[i].reachCircle.visible = false;		
+						}
+					}
+					
+				}
+                
+                if(activeCharacter.character.selectedAttackStyle == "push")
+				{
+					activeCharacter.moveCircle.visible = false;
+					
+					for(var i = 0; i < players.length; i ++)
+					{
+						players[i].castCircle.visible = false;
+						if (players[i].id == activeCharacter.id)
+						{
+							players[i].reachCircle.visible = true;					 
+						}
+						else
+						{
+							players[i].reachCircle.visible = false;		
+						}
+					}
+					
+				}
+				
+				if(activeCharacter.character.selectedAttackStyle == "ranged")
+				{
+					activeCharacter.moveCircle.visible = false;
+					
+					for(var i = 0; i < players.length; i ++)
+					{	
+						players[i].castCircle.visible = false;				
+						players[i].reachCircle.visible = false;		
+					}
+				}
+				
+				if(activeCharacter.character.selectedAttackStyle == "charge")
+				{
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "move");
+		
+					if(timeForAction)
+					{
+				
+						var size = (activeCharacter.character.maxMove * meterEquivalence - activeCharacter.character.moveDone);	
+						activeCharacter.moveCircle.visible = true;
+						activeCharacter.moveCircle.graphics.clear();
+						activeCharacter.moveCircle.graphics.setStrokeStyle(1).beginFill("green").drawCircle(0, 0, size).endStroke();
+						
+						for(var i = 0; i < players.length; i ++)
+						{
+							players[i].castCircle.visible = false;
+							var enemyTeam = false;
+							for(var j = 0; j < players[i].character.team.teamRelations.length; j++)
+							{
+								if(players[i].character.team.teamRelations[j].team == activeCharacter.character.team.name)
+								{
+									if(players[i].character.team.teamRelations[j].attitude == "enemy")
+									{
+										enemyTeam = true;
+									}
+									break;
+								}
+							}
+							
+							if (enemyTeam)
+							{
+								players[i].reachCircle.visible = true;					 
+							}
+							else
+							{
+								players[i].reachCircle.visible = false;		
+							}
+						}
+					}
+				}
+			}
+			
+			
+			if(actionSelected == "use")
+			{
+				activeCharacter.moveCircle.visible = false;
+				
+				for(var i = 0; i < players.length; i ++)
+				{
+					players[i].castCircle.visible = false;
+					players[i].reachCircle.visible = true;					 								
+				}
+				stage.update();
+			}
+			
+			
+			if(actionSelected == "look")
+			{
+				activeCharacter.moveCircle.visible = false;
+				
+				for(var i = 0; i < players.length; i ++)
+				{
+					players[i].reachCircle.visible = true;					 					
+				}
+				stage.update();
+			}
+			
+			if(actionSelected == "cast")
+			{
+				if(activeCharacter.character.selectedSpell != null && activeCharacter.character.selectedSpell.used == false)
+				{
+					
+					for(var i = 0; i < players.length; i ++)
+					{
+						players[i].moveCircle.visible = false;
+						if (players[i].id == activeCharacter.id)
+						{
+							players[i].castCircle.visible = true;
+							players[i].castCircle.graphics.clear();
+							players[i].castCircle.graphics.setStrokeStyle(1).beginFill("#007FFF").drawCircle(0, 0, (activeCharacter.character.selectedSpell.range * meterEquivalence)).endStroke();
+					
+							players[i].reachCircle.visible = false;					 					
+						}
+						else
+						{
+							players[i].castCircle.visible = false;
+							players[i].reachCircle.visible = true;	
+						}
+					}
+				}
+			}
+		}
+		
+		function doAction(x, y)
+		{
+		    if (activeCharacter.type == "PC") {
+		        x = x / canvasZoom - canvasOffsetX;
+		        y = y / canvasZoom - canvasOffsetY;
+
+		        var currentAction = actionSelected;
+		        var charTarget = pointInPlayer(x, y, players);
+		        var objTarget = pointInObject(x, y, objects);
+
+		        if (charTarget) {
+		            if (actionSelected != "melee" && actionSelected != "push" && actionSelected != "walk" && actionSelected != "cast") {
+		                var attack = calculateMeleeAttack(activeCharacter, x, y);
+		                if (!attack.possible) {
+		                    currentAction = "look";
+		                }
+		            }
+
+		        }
+
+		        if (objTarget) {
+		            if (actionSelected != "walk" && actionSelected != "run" && actionSelected != "step" && actionSelected != "retreat" && actionSelected != "sneak" && actionSelected != "look" && actionSelected != "use") {
+		                currentAction = "look";
+		            }
+		        }
+
+		        if (!charTarget && !objTarget) {
+		            if (actionSelected != "walk" && actionSelected != "run" && actionSelected != "step" && actionSelected != "retreat" && actionSelected != "sneak" && actionSelected != "cast") {
+		                currentAction = "walk";
+		            }
+		        }
+
+		        applyAction(x, y, currentAction);
+		    }
+		}
+		
+		function applyAction(x, y, currentAction)
+		{	
+			if(currentAction == "walk")
+			{
+				if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.action == actionSelected && activeCharacter.onGoingAction.actionType == activeCharacter.character.selectedMoveStyle)
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, null, "move");
+				else
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "move");
+								
+				if(timeForAction)
+				{
+					if(activeCharacter.onGoingAction != null && (activeCharacter.onGoingAction.action == "walk" || activeCharacter.onGoingAction.action == "run" || activeCharacter.onGoingAction.action == "sneak" 
+					|| activeCharacter.onGoingAction.action == "retreat") && activeCharacter.onGoingAction.actionType != activeCharacter.character.selectedMoveStyle )
+					{
+						terminateMove();
+					}
+
+					walk(x, y);			
+				}
+				else
+					consolleWriter(activeCharacter.character.name, "Not enough time to do that");
+			}
+				
+			if(currentAction == "step")
+			{
+				if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.action == actionSelected && activeCharacter.onGoingAction.actionType == activeCharacter.character.selectedMoveStyle)
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, null, "minor");
+				else
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "minor");
+				
+				if(timeForAction)
+				{
+					if(activeCharacter.onGoingAction != null && (activeCharacter.onGoingAction.action == "walk" || activeCharacter.onGoingAction.action == "run" || activeCharacter.onGoingAction.action == "sneak" 
+					|| activeCharacter.onGoingAction.action == "retreat") && activeCharacter.onGoingAction.actionType != activeCharacter.character.selectedMoveStyle )
+					{
+						terminateMove();
+					}
+					
+					step(x, y);	
+				}	
+				else
+					consolleWriter(activeCharacter.character.name, "Not enough time to do that");	
+			}
+				
+			if(currentAction == "run")
+			{
+				if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.action == actionSelected && activeCharacter.onGoingAction.actionType == activeCharacter.character.selectedMoveStyle)
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, null, "full");
+				else
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "full");
+				
+				if(timeForAction)
+				{
+					if(activeCharacter.onGoingAction != null && (activeCharacter.onGoingAction.action == "walk" || activeCharacter.onGoingAction.action == "run" || activeCharacter.onGoingAction.action == "sneak" 
+					|| activeCharacter.onGoingAction.action == "retreat") && activeCharacter.onGoingAction.actionType != activeCharacter.character.selectedMoveStyle )
+					{
+						terminateMove();
+					}
+					
+					run(x, y);		
+				}	
+				else
+					consolleWriter(activeCharacter.character.name, "Not enough time to do that");
+			}
+				
+			if(currentAction == "retreat")
+			{
+				if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.action == actionSelected && activeCharacter.onGoingAction.actionType == activeCharacter.character.selectedMoveStyle)
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, null, "full");
+				else
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "full");
+
+				if(timeForAction)
+				{
+					if(activeCharacter.onGoingAction != null && (activeCharacter.onGoingAction.action == "walk" || activeCharacter.onGoingAction.action == "run" || activeCharacter.onGoingAction.action == "sneak" 
+					|| activeCharacter.onGoingAction.action == "retreat") && activeCharacter.onGoingAction.actionType != activeCharacter.character.selectedMoveStyle )
+					{
+						terminateMove();
+					}
+					
+					retreat(x, y);	
+				}	
+				else
+					consolleWriter(activeCharacter.character.name, "Not enough time to do that");	
+			}
+				
+			if(currentAction == "sneak")
+			{
+				if(activeCharacter.onGoingAction != null && activeCharacter.onGoingAction.action == actionSelected && activeCharacter.onGoingAction.actionType == activeCharacter.character.selectedMoveStyle)
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, null, "move");
+				else
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "move");
+				
+				if(timeForAction)
+				{
+					if(activeCharacter.onGoingAction != null && (activeCharacter.onGoingAction.action == "walk" || activeCharacter.onGoingAction.action == "run" || activeCharacter.onGoingAction.action == "sneak" 
+							|| activeCharacter.onGoingAction.action == "retreat") && activeCharacter.onGoingAction.actionType != activeCharacter.character.selectedMoveStyle )
+					{
+						terminateMove();
+					}
+							
+					sneak(x, y);			
+				}
+				else
+					consolleWriter(activeCharacter.character.name, "Not enough time to do that");
+			}
+			
+			if(currentAction == "use")
+			{
+				var object = pointInObject(x, y, objects);
+				var char = pointInPlayer(x, y, players);
+				
+				use(object, char, "use");	
+			}
+			
+			if(currentAction == "look")
+			{
+				var object = pointInObject(x, y, objects);
+				var char = pointInPlayer(x, y, players)
+				use(object, char, "look");	
+			}
+			
+			if(currentAction == "ranged")
+			{
+				if(activeCharacter.character.selectedWeapon != null && (activeCharacter.character.selectedWeapon.reachType == "ranged" || activeCharacter.character.selectedWeapon.reachType == "melee/ranged" ))
+				{	
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "standard");
+					if(timeForAction)
+					{	
+						if(activeCharacter.onGoingAction != null && (activeCharacter.onGoingAction.action == "walk" || activeCharacter.onGoingAction.action == "run" || activeCharacter.onGoingAction.action == "sneak" 
+							|| activeCharacter.onGoingAction.action == "retreat"))	
+						{
+							terminateMove();
+						}		
+									
+						var attackDone = rangedAttack(x, y);
+						
+						if(attackDone)
+							activeCharacter.character.standardActionDone = true;
+					}
+					else
+						consolleWriter(activeCharacter.character.name, "Not enough time to do that");
+				}
+			}
+			
+			if(currentAction == "melee")
+			{
+				if(activeCharacter.character.selectedWeapon == null || activeCharacter.character.selectedWeapon.reachType == "melee" || activeCharacter.character.selectedWeapon.reachType == "melee/ranged" )
+				{
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "standard");
+					
+					if(timeForAction)
+					{
+						if(activeCharacter.onGoingAction != null && (activeCharacter.onGoingAction.action == "walk" || activeCharacter.onGoingAction.action == "run" || activeCharacter.onGoingAction.action == "sneak" 
+							|| activeCharacter.onGoingAction.action == "retreat"))	
+						{
+							terminateMove();
+						}	
+						
+						var attackDone = meleeAttack(activeCharacter, x, y, null, null, null);
+						
+						if(attackDone)
+							activeCharacter.character.standardActionDone = true;
+					}
+					else
+						consolleWriter(activeCharacter.character.name, "Not enough time to do that");
+				}
+			}
+				
+			if(currentAction == "charge")
+			{
+				if(activeCharacter.character.selectedWeapon == null || activeCharacter.character.selectedWeapon.reachType == "melee" || activeCharacter.character.selectedWeapon.reachType == "melee/ranged" )
+				{
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "standard");
+										
+					if(timeForAction)
+					{
+						if(activeCharacter.onGoingAction != null && (activeCharacter.onGoingAction.action == "walk" || activeCharacter.onGoingAction.action == "run" || activeCharacter.onGoingAction.action == "sneak" 
+							|| activeCharacter.onGoingAction.action == "retreat"))	
+						{
+							terminateMove();
+						}	
+						
+						var attackDone = charge(activeCharacter, x, y, null, null, null);
+						
+						if(attackDone)
+							activeCharacter.character.standardActionDone = true;
+					}
+					else
+						consolleWriter(activeCharacter.character.name, "Not enough time to do that");
+				}
+			}	
+                
+			if(currentAction == "push")
+			{
+				if(activeCharacter.character.selectedWeapon == null || activeCharacter.character.selectedWeapon.reachType == "melee" || activeCharacter.character.selectedWeapon.reachType == "melee/ranged" )
+				{
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "standard");
+										
+					if(timeForAction)
+					{
+						if(activeCharacter.onGoingAction != null && (activeCharacter.onGoingAction.action == "walk" || activeCharacter.onGoingAction.action == "run" || activeCharacter.onGoingAction.action == "sneak" 
+							|| activeCharacter.onGoingAction.action == "retreat"))	
+						{
+							terminateMove();
+						}	
+						
+						var attackDone = pushAttack(activeCharacter, x, y);
+						
+						if(attackDone)
+							activeCharacter.character.standardActionDone = true;
+					}
+					else
+						consolleWriter(activeCharacter.character.name, "Not enough time to do that");
+				}              
+			}	
+			
+			if(currentAction == "cast")
+			{
+				if(activeCharacter.character.selectedSpell != null && activeCharacter.character.selectedSpell.used == false)
+				{
+					var timeForAction = checkIsTimeForAction(activeCharacter.character.standardActionDone, activeCharacter.character.moveActionDone, activeCharacter.character.minorActionDone, activeCharacter.onGoingAction, "standard");				
+					if(timeForAction)
+					{
+						if(activeCharacter.onGoingAction != null && (activeCharacter.onGoingAction.action == "walk" || activeCharacter.onGoingAction.action == "run" || activeCharacter.onGoingAction.action == "sneak" 
+							|| activeCharacter.onGoingAction.action == "retreat"))	
+						{
+							terminateMove();
+						}	
+						var attackDone = beginCast(activeCharacter, activeCharacter.character.selectedSpell, x, y);
+						if(attackDone)
+							activeCharacter.character.standardActionDone = true;
+						}
+					else
+						consolleWriter(activeCharacter.character.name, "Not enough time to do that");
+				}              		
+						
+			}
+
+			drawUsedActions();
+		}
+		
+		function checkAttackResult(attack)
+		{
+			var attackResult;
+			if(attack.hit == true)
+				attackResult = "hit";
+			else
+				attackResult = "miss";
+			
+			if(attack.defender.id == activeCharacter.id)
+				var message = "Opportunity attack to " + attack.defender.character.name ;
+			else
+				var message = "Attack " + attack.defender.character.name ;
+				
+			consolleWriter(attack.attacker.character.name, message);
+			if (attack.cover != 0) {
+			    message = "Attack roll: " + attack.roll + " + " + attack.toHit + ", cover:" + attack.cover + ", CA: " + attack.def + ", " + attackResult;
+			} else {
+			    message = "Attack roll: " + attack.roll + " + " + attack.toHit + ", CA: " + attack.def + ", " + attackResult;
+			}
+			consolleWriter(attack.attacker.character.name, message);
+			
+			if(attack.hit == true)
+			{
+				var damage = doDamage(attack.attacker, attack.defender, "right");
+				
+				message = "Damage: " + damage;
+				consolleWriter(attack.attacker.character.name, message);
+			}
+			
+			checkAlive(attack.defender);
+			
+			drawConsolleItems();
+			drawCharImageList();
+		}
+		
+		function checkAlive(player)
+		{
+			if(player.character.hp < 0)
+			{
+				player.deathImage.visible = true;
+				player.image.visible = false;
+				player.character.alive = false;
+				document.getElementById("consolle").innerHTML = document.getElementById("consolle").innerHTML + "</br>" +  player.character.name + " e' morto";
+				document.getElementById("consolle").scrollTop = document.getElementById("consolle").scrollHeight;
+			}
+			
+			checkGameOver();
+		}
+		
+		function increaseRound()
+		{
+			currentRound ++;
+			document.getElementById("round").innerHTML = "Round " + currentRound; 
+		}
+		
+		function checkCurrentRoundEvents()
+		{
+			for(var i = 0; i < timedEvents.length; i++)
+			{
+				if(timedEvents[i].actionRound == currentRound)
+				{
+					if(timedEvents[i].action == "addChar")
+					{
+						addCharacter(timedEvents[i].parameter)
+					}
+					if(timedEvents[i].action == "setLevelState")
+					{
+						levelState = timedEvents[i].parameter;
+						checkTeamAttitudeChange(levelState, null, null, null)
+					}
+				}
+			}
+		}
+		
+		function addCharacter(char)
+		{
+			char.initiative = Math.floor(Math.random() * (20 - 1) + 1);
+			var newPlayers = new Array();
+			addPlayerToCanvas(char);
+			var charAdded = false;
+			
+			for(var i = 0; i < players.length; i++)
+			{
+				if(charAdded == false)
+					{
+					if(players[i].initiative >= char.initiative)
+						newPlayers.push(players[i]);
+					else
+					{
+						newPlayers.push(char);
+						newPlayers.push(players[i]);
+						charAdded = true;
+					}
+				}
+				else
+					newPlayers.push(players[i]);
+			}
+			
+			players = newPlayers;
+		}
+		
+		function checkGameOver()
+		{
+			for(var i = 0; i< gameOverSituations.length; i++)
+			{
+				for(var j = 0; j< players.length; j++)
+				{
+					if(gameOverSituations[i].character.id == players[j].id)
+					{
+						if(players[j].character.alive == false)	
+						{
+							if(gameOverSituations[i].situation == "dead")
+							{
+								for(var k = 0; k < looseDescription.length; k++ )
+								{
+									if(looseDescription[k].reason == "dead")
+										endLevel(gameOverSituations[i].result, looseDescription[k].description);					
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		
+		function endLevel(result, description)
+		{
+			gameOver = true;
+			if(result == "win")
+			{
+				document.getElementById("levelEnd_result").innerHTML = "Hai vinto";
+				document.getElementById("levelEnd_description").innerHTML = winDescrption;
+				var experience = calculateXP();
+				var expContainer = document.getElementById("levelEnd_experience");
+				expContainer.style.visibility = "visible";
+				expContainer.innerHTML = "Experiennce Earned: ";
+
+				var finishExp = document.createElement("div");
+				finishExp.innerHTML = "Expeerience for completing the level:" + experience.endLevel + " px"; ;
+
+				var killsExp = document.createElement("div");
+				for (var i = 0; i < experience.killsExperience.length; i++)
+				{
+				    var killsExpDetials = document.createElement("div");
+				    killsExpDetials.innerHTML = experience.killsExperience[i].name + ": " + experience.killsExperience[i].value + " px";
+				    killsExp.appendChild(killsExpDetials);
+				}
+
+				var objectExp = document.createElement("div");
+				for (var i = 0; i < experience.objectExperience.length; i++) {
+				    var objectExpDetials = document.createElement("div");
+				    objectExpDetials.innerHTML = experience.objectExperience[i].name + ": " + experience.objectExperience[i].value + " px";
+				    objectExp.appendChild(objectExpDetials);
+				}
+
+				var specialExp = document.createElement("div");
+				for (var i = 0; i < experience.specialExperience.length; i++) {
+				    var specialExpDetials = document.createElement("div");
+				    specialExpDetials.innerHTML = experience.specialExperience[i].name + ": " + experience.specialExperience[i].value + " px";
+				    specialExp.appendChild(specialExpDetials);
+				}
+
+				var totalExp = document.createElement("div");
+				totalExp.innerHTML = "total: " + experience.total + " px";
+
+				expContainer.appendChild(finishExp);
+				expContainer.appendChild(killsExp);
+				expContainer.appendChild(objectExp);
+				expContainer.appendChild(specialExp);
+				expContainer.appendChild(totalExp);
+
+				levelEnd_experience
+			}
+			
+			if(result == "loose")
+			{
+				document.getElementById("levelEnd_result").innerHTML = "Hai perso";
+				document.getElementById("levelEnd_description").innerHTML = description;
+			}
+			
+			document.getElementById("levelEnd").style.visibility = "visible";
+			var experience = calculateXP();
+			console.log(experience);
+			
+		}
+
+		function calculateXP()
+		{
+		    var experience =
+		    {
+		        endLevel: 1000,
+		        killsExperience: [],
+		        objectExperience: [],
+		        specialExperience: [],
+                total: 0
+		    }
+		    experience.total += experience.endLevel;
+
+		    for (var i = 0; i < players.length; i++) 
+		    {
+		        if (!players[i].isPCTeam && !players[i].character.alive) 
+		        {
+		            experience.killsExperience.push({ name: players[i].character.name, xp: players[i].xp });
+		            experience.total += players[i].character.xp;
+		        }
+		    }
+
+		    for (var i = 0; i < heroes.length; i++) {
+		        for (var j = 0; j < heroes[j].inventory; j++)
+		        {
+		            if (heroes[j].inventory[j].value)
+		            {
+		                experience.objectExperience.push({ name: heroes[j].inventory[j].name, xp: heroes[j].character.inventory[j].value });
+		                experience.total += heroes[j].inventory[j].value;
+		            }
+		        }
+		    }
+		    if (montezuma)
+		    {
+		        experience.specialExperience.push({ name: "Montezuma approved", value: 500 });
+		    }
+
+		    for (var i = 0; i < experience.specialExperience.length; i++) {
+		        experience.total += experience.specialExperience[i].value;
+		    }
+
+		    return experience;
+		}
+		
+		function setCharactersSizeCircle()
+		{
+			var PCTeam;
+			for(var i = 0; i < teams.length; i++)
+			{
+				if (teams[i].isPCTeam)
+					PCTeam = teams[i];
+			}
+			
+			for(var i = 0; i < players.length; i++)
+			{
+				players[i].sizeCircle.visible = true;
+				if(players[i].type == "NPC")
+				{
+					for(var j = 0; j < players[i].character.team.teamRelations.length; j++)
+					{
+						players[i].sizeCircle.visible = players[i].character.alive;
+						
+						if( players[i].character.team.teamRelations[j].team == PCTeam.name)
+						{
+							if(players[i].character.team.teamRelations[j].attitude == "enemy")
+							{
+								players[i].sizeCircle.graphics.clear();
+								players[i].sizeCircle.graphics.setStrokeStyle(4).beginStroke("red").drawCircle(0, 0, (players[i].character.radius)).endStroke();
+							}
+							if(players[i].character.team.teamRelations[j].attitude == "friend")
+							{
+								players[i].sizeCircle.graphics.clear();
+								players[i].sizeCircle.graphics.setStrokeStyle(4).beginStroke("blue").drawCircle(0, 0, (players[i].character.radius)).endStroke();
+							}
+							
+							if(players[i].character.team.teamRelations[j].attitude == "neutral")
+							{
+								players[i].sizeCircle.graphics.clear();
+								players[i].sizeCircle.graphics.setStrokeStyle(4).beginStroke("grey").drawCircle(0, 0, (players[i].character.radius)).endStroke();
+							}
+						}
+					}
+				}
+				else
+				{
+					if(players[i].id == activeCharacter.id)
+					{
+						players[i].sizeCircle.graphics.clear();
+						players[i].sizeCircle.graphics.setStrokeStyle(4).beginStroke("yellow").drawCircle(0, 0, (players[i].character.radius)).endStroke();
+					}
+					else
+					{
+						players[i].sizeCircle.graphics.clear();
+						players[i].sizeCircle.graphics.setStrokeStyle(4).beginStroke("green").drawCircle(0, 0, (players[i].character.radius)).endStroke();
+					}
+				}
+			}
+		
+		}
+		
+		function checkTeamAttitudeChange(action, targetTeam, talkActionId, pickUpObjectId)
+		{
+			for(var i = 0; i < teams.length; i++ )
+			{
+				if(teams[i].isPCTeam == false && ( teams[i].name == targetTeam || targetTeam == null))
+				{
+					
+					for(var j = 0; j < teams[i].attitudeChanges.length; j++)
+					{
+						var relationTo = teams[i].attitudeChanges[j].targetTeam;
+						
+						for(var k = 0; k < teams[i].teamRelations.length; k++ )
+						{
+							if(teams[i].teamRelations[k].team == relationTo)
+							{
+								var currentAttitude = teams[i].teamRelations[k].attitude;
+							}
+						}
+
+						if( 
+							(teams[i].attitudeChanges[j].levelState == levelState || teams[i].attitudeChanges[j].levelState == "any") &&
+							(teams[i].attitudeChanges[j].currentAttitude == "any" || teams[i].attitudeChanges[j].currentAttitude == currentAttitude) && 
+							(currentAttitude != teams[i].attitudeChanges[j].newAttitude) &&
+							(teams[i].attitudeChanges[j].action == "any" || teams[i].attitudeChanges[j].action == action) &&
+							(talkActionId == null || teams[i].attitudeChanges[j].talkActionId == talkActionId) &&
+							(pickUpObjectId == null || teams[i].attitudeChanges[j].pickUpObjectId == pickUpObjectId) 
+						)
+						{
+							//chanage attitude	
+							for(var ii = 0; ii < teams.length; i++)
+							{
+								if(teams[ii].name  = relationTo)	
+								{
+									var relationTeam = teams[ii];
+									break;
+								}
+							}
+							changeTeamAttitude(teams[i], teams[i].leader, relationTeam, teams[i].attitudeChanges[j].newAttitude, teams[i].attitudeChanges[j].answerId)
+							
+
+						}
+					}
+				}
+			}
+					
+			setCharactersSizeCircle();
+		}
+		
+		function changeTeamAttitude(team, targetChar, targetTeam, newAttitude, answerId)
+		{
+		
+			
+			for(var i = 0; i < targetTeam.teamRelations.length; i++ )
+			{
+				if(targetTeam.teamRelations[i].team == team.name )
+				{
+					targetTeam.teamRelations[i].attitude = newAttitude;
+				}
+			}	
+			
+			for(var i = 0; i < team.teamRelations.length; i++ )
+			{
+				if(team.teamRelations[i].team == targetTeam.name)
+				{
+					team.teamRelations[i].attitude = newAttitude;
+				}
+			}
+			
+			for(var k = 0; k < targetChar.character.talksDone.length; k++)
+			{
+				if(targetChar.character.talksDone[k].id == answerId)
+				{
+					document.getElementById('NPCTalkImage').innerHTML = '<img src="' + targetChar.img + '" height="100" width="100" />';
+					document.getElementById('NPCTalkPhrase').innerHTML = targetChar.character.talksDone[k].phrase;
+					document.getElementById('NPCTalk').style.visibility = 'visible';	
+				}
+			}
+			
+			setCharactersSizeCircle();
+			
+		}
+		
+		function checkTalkingSituation(actionDone)
+		{
+			if(activeCharacter.character.talksDone != null)
+			{
+				for(var i = 0; i < activeCharacter.character.talksDone.length; i++)
+				{
+					if( (activeCharacter.character.talksDone[i].levelState == null || activeCharacter.character.talksDone[i].levelState == levelState) && 
+						(activeCharacter.character.talksDone[i].actionDone ==  actionDone) && 
+						activeCharacter.character.talksDone[i].level == level &&
+                        activeCharacter.character.talksDone[i].levelID == levelID)
+					{
+						if(activeCharacter.type == "PC")
+						{
+							document.getElementById('PCTalkImage').innerHTML = '<img src="' + activeCharacter.img + '" height="100" width="100" />';
+							document.getElementById('PCTalkPhrase').innerHTML = activeCharacter.character.talksDone[i].phrase;
+							document.getElementById('PCTalk').style.visibility = 'visible';	
+						}
+						
+						if(activeCharacter.type == "NPC")
+						{
+							document.getElementById('NPCTalkImage').innerHTML = '<img src="' + activeCharacter.img + '" height="100" width="100" />';
+							document.getElementById('NPCTalkPhrase').innerHTML = activeCharacter.character.talksDone[i].phrase;
+							document.getElementById('NPCTalk').style.visibility = 'visible';	
+						}
+					}
+				}
+			}
+		
+		}
+		
+		function checkRoomEntered(character)
+		{
+			var room = checkPositionInRoom(character.posX, character.posY);
+			if (room != null && room.visited == false)
+			{
+				room.visited = true; 
+				
+				document.getElementById('PCTalkImage').innerHTML = '<img src="' + activeCharacter.img + '" height="100" width="100" />';
+				document.getElementById('PCTalkPhrase').innerHTML = room.description;
+				document.getElementById('PCTalk').style.visibility = 'visible';	
+			}
+		}
+		
+		function checkPositionInRoom(x, y)
+		{
+			for(var i = 0; i < rooms.length; i++)
+			{
+				if(rooms[i].square[0] < x && x < (rooms[i].square[0] + rooms[i].square[2]) &&  rooms[i].square[1] < y && y <  (rooms[i].square[1] + rooms[i].square[3]))
+				{
+					return rooms[i];
+				}
+			}
+			return null;
+		}
+		
+		function saveHeroes()
+		{
+			for(var i = 0;  i < players.length; i++)
+			{
+				for(var j = 0; j < heroes.length; j++)
+				{
+					if(players[i].id == heroes[j].id)
+					{
+						heroes[j].character.alive = players[i].character.alive;
+						heroes[j].character.hp = players[i].character.hp;
+						
+						heroes[j].character.inventory = new Array();
+						
+						for(var k = 0; k < players[i].character.inventory.length; k++)
+						{
+							heroes[j].character.inventory.push(players[i].character.inventory[k]);
+						}
+						
+						heroes[j].character.rightHand = players[i].character.rightHand;
+						heroes[j].character.leftHand = players[i].character.leftHand;
+						heroes[j].character.rightRing = players[i].character.rightRing;
+						heroes[j].character.leftRing = players[i].character.leftRing;
+						heroes[j].character.head = players[i].character.head;
+						heroes[j].character.boots = players[i].character.boots;
+						heroes[j].character.amulet = players[i].character.amulet;
+						heroes[j].character.gloves = players[i].character.gloves;
+						heroes[j].character.selectedHand = players[i].character.selectedHand;
+						heroes[j].character.selectedWeapon = players[i].character.selectedWeapon;
+												
+						break;
+					}
+				}
+			}
+		}
+		
+		function loadHeroes()
+		{
+			for(var i = 0;  i < players.length; i++)
+			{
+				for(var j = 0; j < heroes.length; j++)
+				{
+					if(players[i].id == heroes[j].id)
+					{
+						
+						players[i].character.alive = heroes[j].character.alive;
+						players[i].character.hp = heroes[j].character.hp;
+						
+						players[i].character.inventory = new Array();
+						for(var k = 0; k < heroes[j].character.inventory.length; k++)
+						{
+							players[i].character.inventory.push(heroes[j].character.inventory[k]);
+						}
+						players[i].character.rightHand = heroes[j].character.rightHand;
+						players[i].character.leftHand = heroes[j].character.leftHand;
+						players[i].character.rightRing = heroes[j].character.rightRing;
+						players[i].character.leftRing = heroes[j].character.leftRing;
+						players[i].character.head = heroes[j].character.head;
+						players[i].character.boots = heroes[j].character.boots;
+						players[i].character.amulet = heroes[j].character.amulet;
+						players[i].character.gloves = heroes[j].character.gloves;
+						players[i].character.selectedHand = heroes[j].character.selectedHand;
+						players[i].character.selectedWeapon = heroes[j].character.selectedWeapon;
+												
+						break;
+					}
+				}
+			}
+		}
+		
+		function checkIsTimeForAction(standardActionDone, moveActionDone, minorActionDone, onGoingAction, actionDuration)
+		{
+			if(actionDuration == "full")
+			{
+				if(standardActionDone || moveActionDone || minorActionDone || onGoingAction != null )
+					return false;
+				else
+					return true;	
+			}
+			
+			if(actionDuration == "standard")
+			{
+				if(standardActionDone == true || (onGoingAction != null && (onGoingAction.actionDuration == "full" || onGoingAction.actionDuration == "standard" || (onGoingAction.actionDuration == "move" && moveActionDone == true) || (onGoingAction.actionDuration == "minor" && minorActionDone == true && moveActionDone == true))  ) )
+					return false;
+				else
+					return true;	
+			}
+			
+			if(actionDuration == "move")
+			{
+				if(standardActionDone == true && moveActionDone == true || (onGoingAction != null && (onGoingAction.actionDuration == "full" || (onGoingAction.actionDuration == "standard" && moveActionDone == true) || (onGoingAction.actionDuration == "move" && (moveActionDone == true || standardActionDone == true)) || (onGoingAction.actionDuration == "minor" &&  minorActionDone == true && (moveActionDone == true || standardActionDone == true)) )) )
+					return false;
+				else
+					return true;
+			}
+			
+			if(actionDuration == "minor")
+			{
+				if(standardActionDone == true && moveActionDone == true && minorActionDone == true || (onGoingAction != null  && (onGoingAction.actionDuration == "full" || (onGoingAction.actionDuration == "standard" && (moveActionDone == true && minorActionDone == true) ) || (onGoingAction.actionDuration == "move" && ((moveActionDone == true || standardActionDone == true)&& minorActionDone == true) ) || (onGoingAction.actionDuration == "minor" && (moveActionDone == true && standardActionDone == true) )  ) ))
+					return false;
+				else
+					return true;
+			}
+		
+		}
+		
+		function terminateMove()
+		{
+			if(activeCharacter.onGoingAction.actionType == "walk" || activeCharacter.onGoingAction.actionType == "sneak")
+			{
+				if(activeCharacter.character.moveActionDone == false)
+					activeCharacter.character.moveActionDone = true;
+				else
+					activeCharacter.character.standardActionDone = true;
+			}
+			
+			if(activeCharacter.onGoingAction.actionType == "run" || activeCharacter.onGoingAction.actionType == "retreat")
+			{
+				activeCharacter.character.minorActionDone = true;
+				activeCharacter.character.moveActionDone = true;
+				activeCharacter.character.standardActionDone = true;
+			}
+			
+			activeCharacter.onGoingAction = null;
+			activeCharacter.character.moveDone = 0;
+			
+			drawUsedActions();
+		}
+		
+		function tutorial() 
+		{
+		    if (showTutorial)
+			{
+			    var scroll = document.getElementById("consolle").scrollTop;
+				if (currentRound === 1) 
+				{
+				consolleWriter("TUTORIAL TIP", "Ok, il primo livello e' iniziato, sulla destra dello schermo vedi quello che i nemici stanno dicendo (in questo caso il capo delle guardie) sulla sinistra quello che dicono, o penano i personaggi, in questo caso i pensieri preoccupati di Tzel, ti consiglio di leggereli con cura, sono fonti di buoni consigli  ");
+				
+				consolleWriter("TUTORIAL TIP", "Puoi vedere che le guardie sono al momento neutrali nei nostri confronti dal cerchio grigio attorno al personaggio, quel cerchio e' blu per i personaggi amichevoli e orsso per quelli ostili");
+				
+				consolleWriter("TUTORIAL TIP", "in basso a destra trovi il menu per selezionare i comandi: cliccando sull'icona dei piedi si apre un piccolo menu' seleziona l'occhio");
+				
+				consolleWriter("TUTORIAL TIP", "clicca sul capitano delle guardie per aprire il menu di conversazione: la seconda frase ti consentira' di guadagnare del tempo rendendo le guardie amichevoli per un po' (cosi' ti potrai muovere per la stanza senza essere attaccato ");
+				}
+				
+				document.getElementById("consolle").scrollTop = scroll;
+			}
+		}
+
+    </script>
+  </body>
+</html>

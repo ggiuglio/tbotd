@@ -13,7 +13,7 @@ function loadLevel(level)
 	stages = loadStages(level, equipment);
 
     // TODO change this to change start stage in level
-	selectStage(stages[0].id, 'start');
+	selectStage(stages[1].id, 'start');
 	gameOverSituations.push(new gameOverSituation("loose", heroes[0], "dead", null));
 }
 

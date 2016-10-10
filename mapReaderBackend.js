@@ -165,7 +165,7 @@ function loadStageWalls(stage)
 		var wallLine = [1285,	1140,	1285,	1375];
 		stageWalls.push(wallLine);
 	
-		var wallLine = [1285,	1375,	1610,	1375];
+		var wallLine = [1285,	1375,	1610,	1375]; 
 		stageWalls.push(wallLine);
 		
 		var wallLine = [1610,	1010,	1610,	1375];
@@ -174,7 +174,7 @@ function loadStageWalls(stage)
 		var wallLine = [1255,	1010,	1610,	1010];
 		stageWalls.push(wallLine);
 		
-		var wallLine = [1255,	745,	1255,	1010];
+		var wallLine = [1255,	745,	1255,	1010]; 
 		stageWalls.push(wallLine);
 		
 		var wallLine = [745,	745,	1255,	745];
@@ -195,16 +195,16 @@ function loadStageWalls(stage)
 		var wallLine = [365,	1135,	745,	1135];
 		stageWalls.push(wallLine);
 	
-		var wallLine = [745,	1005,	745,	1135];
+		var wallLine = [745,	1005,	745,	1135]; 
 		stageWalls.push(wallLine);
 		
 		var wallLine = [745,	1005,	1005,	1005];
 		stageWalls.push(wallLine);
 		
-		var wallLine = [1005,	1117,	1005,	2070];
+		var wallLine = [1005,	1127,	1005,	2070];
 		stageWalls.push(wallLine);
 		
-		var wallLine = [1005,	1005,	1005,	1064];
+		var wallLine = [1005,	1005,	1005,	1054];
 		stageWalls.push(wallLine);
 	}
 	

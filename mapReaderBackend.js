@@ -1085,8 +1085,8 @@ function loadStageObjects(stage, equipment)
 		stageObjects[5].description = "E' una botola, da qui parte un passaggio segreto che portera' il mio collo al sicuro da quella cravatta di canapa di cui si parlava";
 		stageObjects[5].cover = 0;
 		stageObjects[5].size = 25;
-		stageObjects[5].posX = 1455;
-		stageObjects[5].posY = 1190;
+		stageObjects[5].posX = 2455; //1455
+		stageObjects[5].posY = 2190; //1190
 		stageObjects[5].scaleX = 0.25;
 		stageObjects[5].scaleY = 0.25;
 		stageObjects[5].image = null;

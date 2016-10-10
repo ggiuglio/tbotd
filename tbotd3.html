@@ -48,7 +48,7 @@
 		var canvasOffsetX = 0;
 		var canvasOffsetY = 0;
 		var canvasZoom = 1;
-		var showDebugLines = true;
+		var showDebugLines = false;
 		var meterEquivalence = 70;
 		var lifeBallFilling = null;
 		var lifeBall = null;
@@ -1701,8 +1701,6 @@
 			
 			document.getElementById("levelEnd").style.visibility = "visible";
 			var experience = calculateXP();
-			console.log(experience);
-			
 		}
 
 		function calculateXP()

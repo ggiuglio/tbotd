@@ -677,7 +677,6 @@ function adjustMoveOnWalls(charX, charY, x, y, charRadius, walls)
 	return adjPos;
 }
 
-
 function setMoveOnDistance(charX, charY, x, y, distanceLimit)
 {
 	var adjPos = new Object();
@@ -788,7 +787,6 @@ function pointInPlayer(x, y, players)
 	return player;
 }
 
-
 function isObjectInReach(object, char)
 {
 	var inReach = false;
@@ -813,7 +811,6 @@ function isObjectInReach(object, char)
 	return inReach;
 }
 
-
 function characterInRect(char, ax, ay, bx, by, dx, dy)
 {
 	var x = char.posX;
@@ -830,8 +827,6 @@ function characterInRect(char, ax, ay, bx, by, dx, dy)
 	
 	return true	
 }
-
-
 
 
 function rollD20()

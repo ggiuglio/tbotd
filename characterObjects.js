@@ -29,7 +29,7 @@ function character(name, longName, description, img, radius, reach, maxMove, lev
 	this.naturalArmor = naturalArmor;
 	this.maxHp = hp;
 	this.maxMove = maxMove;
-	this.moveDone = null;
+	this.moveDone = 0;
 	this.moveActionDone = false;
 	this.standardActionDone = false;
 	this.minorActionDone = false;

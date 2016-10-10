@@ -179,7 +179,6 @@ function use(object, char, useType)
 							actionDiv.innerHTML = char.character.talksRecived[j].phrase;
 							actionDiv.style.cursor = "pointer";
 							actionDiv.id = char.character.talksRecived[j].id;
-							console.log("talk recived", char.character.talksRecived[j]);
 							actionDiv.onclick = createTalkHandler(char.character.talksRecived[j], activeCharacter, char);					
 							document.getElementById("useAndTalkActions").appendChild(actionDiv);
 						}
@@ -244,7 +243,6 @@ function doTalk(talk, charTalking, charTalkingTo)
 	document.getElementById('PCTalkPhrase').innerHTML = talk.phrase;
 	
 	document.getElementById('PCTalk').style.visibility = 'visible';
-	console.log(talk);
 	
 	if(talk.effect == "friend" || talk.effect == "enemy" || talk.effect == "neutral")
 	{
@@ -389,7 +387,7 @@ function applyUseAction(action, player, targetObject, triggerObject, parameters,
 
 function getMovementTokens(x,y, maxDist, checkOpportunityAttack)
 {
-	var moveDone = activeCharacter.character.moveDone;
+    var moveDone = activeCharacter.character.moveDone;
 	var moveArray = pathFinder(activeCharacter.posX, activeCharacter.posY, x, y);
 	if (moveArray != null)
 	{
@@ -713,7 +711,6 @@ function moveComplete(moveType, targetX, targetY)
 		if((moveType == 'step' && (!activeCharacter.character.minorActionDone || !activeCharacter.character.moveActionDone || !activeCharacter.character.standardActionDone )) || 
 			(moveType != 'step' && (!activeCharacter.character.moveActionDone || !activeCharacter.character.standardActionDone )) )
 		{
-			console.log('step');
 			activeCharacter.moveCircle.graphics.clear();
 			activeCharacter.moveCircle.graphics.setStrokeStyle(1).beginFill("green").drawCircle(0, 0, maxMove * 100).endStroke();
 			activeCharacter.moveCircle.visible = true;

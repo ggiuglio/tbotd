@@ -9,7 +9,7 @@ function pathFinder(startX, startY, goalX, goalY) {
     if (canGo(start, goal, activeCharacter, objTarget, charTarget)) {
         var path = {
             wayPoints: [[goal.x, goal.y]],
-            length: getDist(start, goal)
+            distance: getDist(start, goal)
         };
         return path;
     } else {

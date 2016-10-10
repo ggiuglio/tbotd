@@ -4,4 +4,6 @@ This is the world famous The Bite of the Dragon source code, it,s written in pla
 
 enjoy ;)
 
-test version here http://ggiuglio.altervista.org/ub_new/tbotd3.html
+test version:
+italian version http://ggiuglio.altervista.org/ub_new/tbotd3.html
+english version http://ggiuglio.altervista.org/ub_new/tbotd3.html?lang=en
